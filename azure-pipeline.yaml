@@ -1,0 +1,57 @@
+trigger:
+  branches:
+    include:
+      - master
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  azureServiceConnection: 'ARM_SERVICE_CONNECTION' 
+  backend_storage_account_name: 'STORAGE_ACCOUNT_NAME'
+  backend_container_name: 'STORAGE_CONTAINER_NAME'
+  backend_key: 'terraform.tfstate'
+  resource_group: 'RESOURCE_GROUP_NAME'
+  location: 'eastus'
+  terraform_version: '1.5.0'
+
+steps:
+  - task: TerraformInstaller@0
+    inputs:
+      terraformVersion: $(terraform_version)
+  
+  - task: Checkout@1
+
+  - task: TerraformTaskV4@4
+    inputs:
+      provider: 'azurerm'
+      command: 'init'
+      backendServiceArm: $(azureServiceConnection)
+      backendAzureRmResourceGroupName: $(resource_group)
+      backendAzureRmStorageAccountName: $(backend_storage_account_name)
+      backendAzureRmContainerName: $(backend_container_name)
+      backendAzureRmKey: $(backend_key)
+      workingDirectory: $(System.DefaultWorkingDirectory)
+
+  - task: TerraformTaskV4@4
+    inputs:
+      provider: 'azurerm'
+      command: 'plan'
+      environmentServiceNameAzureRM: $(azureServiceConnection)
+      workingDirectory: $(System.DefaultWorkingDirectory)
+      commandOptions: '-out=tfplan'
+
+  - task: TerraformTaskV4@4
+    inputs:
+      provider: 'azurerm'
+      command: 'apply'
+      environmentServiceNameAzureRM: $(azureServiceConnection)
+      workingDirectory: $(System.DefaultWorkingDirectory)
+      commandOptions: 'tfplan'
+      inputTargetPlanOrStateFilePath: '$(System.DefaultWorkingDirectory)/tfplan'
+      runAgentJob: true
+
+  - task: PublishPipelineArtifact@1
+    inputs:
+      targetPath: '$(System.DefaultWorkingDirectory)/tfplan'
+      artifactName: 'terraform-plan'
